@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>全家总动员 V23 (专属定制)</title>
+    <title>全家总动员</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root {
             --primary: #4facfe; --secondary: #00f2fe; --gold: #FFD700;
             --danger: #ff6b6b; --success: #00b894; --bg: #f0f2f5; --text: #2d3436;
-            --admin: #6c5ce7;
+            --admin: #6c5ce7; /* 家长功能颜色 */
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -35,7 +35,8 @@
         }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
         .dot.ok { background: #2ecc71; box-shadow: 0 0 5px #2ecc71; }
-        .dot.err { background: #f1c40f; }
+        .dot.load { background: #f1c40f; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
         /* 角色切换 */
         .profile-switcher { display: flex; justify-content: center; margin-top: -45px; gap: 40px; position: relative; z-index: 10; }
@@ -95,10 +96,9 @@
         .form-top { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
         .form-bot { display: flex; gap: 8px; align-items: center; }
         .form-input { border: 1px solid #ddd; padding: 8px; border-radius: 6px; font-size: 0.9rem; width: 100%; }
-        
         .set-group-title { font-weight: bold; color: #00b894; margin: 20px 0 10px 0; display: flex; justify-content: space-between; align-items: center; }
         .btn-tiny-add { background: #e0f2f1; color: #00695c; border: none; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; cursor: pointer; }
-        .btn-del { background: #ff7675; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; font-weight: bold; flex-shrink: 0; }
+        .btn-del { background: #ff7675; color: white; border: none; padding: 5px; width: 30px; height: 30px; border-radius: 50%; font-weight: bold; flex-shrink: 0; }
         .btn-add-new { width: 100%; padding: 12px; background: white; border: 2px dashed #ccc; color: #888; border-radius: 10px; margin-top: 15px; cursor: pointer; }
         .section-inp { background: #e0f2f1; color: #00695c; border: none; font-weight: bold; }
 
@@ -108,6 +108,11 @@
         
         .log-entry { display: flex; justify-content: space-between; padding: 12px 5px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
         .log-score.plus { color: #00b894; } .log-score.minus { color: #ff6b6b; }
+        .log-empty { text-align: center; color: #ccc; padding: 20px; }
+        .date-bar { background: white; padding: 15px; border-radius: 15px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .date-input { border: 1px solid #ddd; padding: 8px; border-radius: 8px; font-size: 0.95rem; color: #555; }
+        .daily-val { font-size: 1.2rem; font-weight: 900; }
+        .daily-val.pos { color: #00b894; } .daily-val.neg { color: #ff6b6b; }
 
         #loading-mask { position: fixed; top:0; left:0; width:100%; height:100%; background: #fff; z-index: 999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
@@ -116,14 +121,11 @@
 </head>
 <body>
 
-<div id="loading-mask"><div class="spinner"></div><p style="color:#999;margin-top:10px">配置加载中...</p></div>
+<div id="loading-mask"><div class="spinner"></div><p style="color:#999;margin-top:10px">初始化中...</p></div>
 
 <div class="header">
-    <h1>☁️ 全家总动员 V23</h1>
-    <div class="sync-badge">
-        <div class="dot" id="sync-dot"></div>
-        <span id="sync-text">连接中</span>
-    </div>
+    <h1>☁️ 全家总动员</h1>
+    <div class="sync-badge"><div class="dot" id="sync-dot"></div><span id="sync-text">连接中</span></div>
 </div>
 
 <div class="profile-switcher">
@@ -153,11 +155,12 @@
 
 <div class="list-container" id="list-area"></div>
 
+<!-- 底部导航 -->
 <div class="footer">
     <button class="footer-btn" onclick="openSettings()">⚙️ 规则设置</button>
     <button class="footer-btn" onclick="location.reload()">🔄 刷新</button>
-    <button class="footer-btn" style="color:var(--admin)" onclick="adminAdjust()">👨‍🔧 调整</button>
-    <button class="footer-btn" style="color:red" onclick="forceReset()">⚠️ 重置</button>
+    <!-- 🟢 新增：调分按钮 -->
+    <button class="footer-btn" style="color:var(--admin);font-weight:bold" onclick="adminAdjust()">👨‍🔧 调分</button>
 </div>
 
 <!-- 设置模态框 -->
@@ -166,7 +169,7 @@
         <h2>⚙️ 规则设置</h2>
         <div>
             <button style="margin-right:10px;padding:8px 15px;border:none;border-radius:20px;background:#eee" onclick="closeSettings()">取消</button>
-            <button style="background:#00b894;color:white;padding:8px 15px;border:none;border-radius:20px" onclick="saveSettings()">保存同步</button>
+            <button style="background:#00b894;color:white;padding:8px 15px;border:none;border-radius:20px" onclick="saveSettings()">保存</button>
         </div>
     </div>
     <div class="modal-content">
@@ -190,94 +193,62 @@
     // ============================================================
     const SUPABASE_URL = 'https://jtjcfxikwzfgzcbrpbec.supabase.co'; 
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0amNmeGlrd3pmZ3pjYnJwYmVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5Mjg2NDMsImV4cCI6MjA3OTUwNDY0M30.88bohahQuyfYjD-BjqfeoPsocQeU5eILzLdskdaeDxk';
-    const ADMIN_PWD = "1221"; // 家长管理密码
+    const ADMIN_PWD = "8888"; // 家长密码
     // ============================================================
 
     const { createClient } = supabase;
     const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // --- 定制配置 (按照您的最新要求) ---
+    // 默认配置
     const defaultConfig = {
         sister: {
             tasks: [
-                // 1. 学习
-                { section: "📚 学习任务", id: 101, icon: "✍️", name: "学校作业自主完成", desc: "不催促，主动开始", points: 5 },
-                { section: "📚 学习任务", id: 102, icon: "💯", name: "学校作业全对", desc: "正确率100%", points: 2 },
-                { section: "📚 学习任务", id: 103, icon: "🗣️", name: "口述两道题目", desc: "讲题思路", points: 4 },
-                { section: "📚 学习任务", id: 104, icon: "📖", name: "家庭语文阅读", desc: "完成并订正清楚", points: 3 },
-                { section: "📚 学习任务", id: 105, icon: "🔤", name: "家庭英语阅读", desc: "两篇", points: 2 },
-                { section: "📚 学习任务", id: 106, icon: "🧮", name: "计算10分钟训练", desc: "专注练习", points: 3 },
-                { section: "📚 学习任务", id: 107, icon: "📝", name: "作业习惯好", desc: "读题/圈关键字/不漏步骤/卷面整洁", points: 5 },
-
-                // 2. 生活
-                { section: "🌟 生活自理", id: 201, icon: "🦷", name: "饭后口腔护理", desc: "漱口+冲洗牙套", points: 1 },
-                { section: "🌟 生活自理", id: 202, icon: "👕", name: "衣物干净整洁", desc: "注意仪表", points: 1 },
-                { section: "🌟 生活自理", id: 203, icon: "🚿", name: "主动刷牙洗脸", desc: "早晚自觉", points: 1 },
-
-                // 3. 习惯
-                { section: "✨ 行为习惯", id: 301, icon: "📚", name: "主动阅读课外书", desc: "超过30分钟", points: 2 },
-                { section: "✨ 行为习惯", id: 302, icon: "😊", name: "礼貌待人", desc: "不顶嘴", points: 1 },
-                { section: "✨ 行为习惯", id: 303, icon: "🤝", name: "帮助弟弟", desc: "友爱互动", points: 1 },
-
-                // 4. 额外大奖
-                { section: "🏆 额外大奖", id: 401, icon: "🌹", name: "老师表扬", desc: "获得表扬", points: 5 },
-                { section: "🏆 额外大奖", id: 402, icon: "🥇", name: "考试进步", desc: "单科排名前五", points: 30 }
+                { section: "📚 基础", id: 101, icon: "✍️", name: "作业完成", desc: "放学不拖拉", points: 2 },
+                { section: "🧮 数学", id: 110, icon: "⭕", name: "圈画关键词", desc: "每题必圈", points: 3 }
             ],
-            penalties: [
-                { id: 501, icon: "🐢", name: "拖延磨蹭", desc: "提醒无效", points: -2 },
-                { id: 502, icon: "🎮", name: "沉迷玩耍", desc: "叫不动", points: -2 },
-                { id: 503, icon: "💥", name: "乱发脾气", desc: "态度恶劣", points: -2 },
-                { id: 504, icon: "🤥", name: "撒谎打人", desc: "原则性错误", points: -5 }
-            ],
-            rewards: [
-                { id: 601, icon: "💰", name: "1元零花钱", points: 10 },
-                { id: 602, icon: "🎮", name: "自主游玩10分钟", points: 10 },
-                { id: 603, icon: "📺", name: "看电视30分钟", points: 50 },
-                { id: 604, icon: "🥤", name: "周末奶茶", points: 100 },
-                { id: 605, icon: "📚", name: "兑换书籍", points: 100 },
-                { id: 606, icon: "🎡", name: "游乐场门票", points: 300 }
-            ]
+            penalties: [{ id: 501, icon: "🐢", name: "拖延", desc: "提醒无效", points: -2 }],
+            rewards: [{ id: 601, icon: "💰", name: "1元零花钱", points: 15 }]
         },
         brother: {
-            tasks: [
-                { section: "日常", id: 1, icon: "🦷", name: "乖乖刷牙", desc: "配合", points: 2 },
-                { section: "日常", id: 2, icon: "🍚", name: "自己吃饭", desc: "不喂", points: 2 },
-                { section: "日常", id: 3, icon: "🧸", name: "收玩具", desc: "玩完归位", points: 2 },
-                { section: "日常", id: 4, icon: "💤", name: "按时睡觉", desc: "不磨蹭", points: 2 },
-                { section: "学习", id: 5, icon: "📖", name: "读绘本/认字", desc: "认真学习", points: 3 }
-            ],
-            penalties: [
-                { id: 51, icon: "😭", name: "无理哭闹", desc: "打滚", points: -3 },
-                { id: 52, icon: "👊", name: "打人", desc: "打姐姐", points: -10 }
-            ],
-            rewards: [
-                { id: 81, icon: "🍦", name: "冰淇淋", points: 20 },
-                { id: 82, icon: "📺", name: "动画片1集", points: 50 },
-                { id: 83, icon: "🎁", name: "新玩具", points: 200 }
-            ]
+            tasks: [{ section: "日常", id: 1, icon: "🦷", name: "乖乖刷牙", desc: "配合", points: 2 }],
+            penalties: [{ id: 51, icon: "😭", name: "无理哭闹", desc: "打滚", points: -3 }],
+            rewards: [{ id: 81, icon: "🍦", name: "冰淇淋", points: 20 }]
         }
     };
 
-    let appData = {
-        userData: { sister: { score: 0, history: [], dailyLog: {} }, brother: { score: 0, history: [], dailyLog: {} } },
-        userConfig: JSON.parse(JSON.stringify(defaultConfig))
-    };
-
+    let globalConfig = {};
+    let globalScores = { sister: 0, brother: 0 };
+    let dailyData = { sister: {logs:[], done:[]}, brother: {logs:[], done:[]} };
     let curUser = 'sister';
     let curTab = 'earn';
     let setCurUser = 'sister';
-    let queryDate = new Date().toLocaleDateString('zh-CN').split('/').map(p=>p.padStart(2,'0')).join('-');
+    let queryDate = new Date().toISOString().split('T')[0];
 
     // --- 初始化 ---
     async function init() {
         try {
-            const { data, error } = await sb.from('family_data').select('*').eq('id', 1).single();
-            if (!data || error) {
-                await sb.from('family_data').insert([{ id: 1, content: appData }]);
-            } else if (data.content) {
-                appData = { ...appData, ...data.content };
-                sanitizeData(); // 强制清洗数据
+            updateStatus('load', '同步中');
+            // 1. 读取配置
+            let { data: cfg } = await sb.from('app_config').select('*').eq('id', 1).single();
+            if(!cfg) {
+                // 自动初始化（如果表是空的）
+                globalConfig = JSON.parse(JSON.stringify(defaultConfig));
+                await sb.from('app_config').insert([{ id: 1, content: globalConfig }]);
+            } else {
+                globalConfig = cfg.content;
             }
+
+            // 2. 读取总分
+            let { data: sc } = await sb.from('app_totals').select('*').eq('id', 1).single();
+            if(!sc) {
+                await sb.from('app_totals').insert([{ id: 1, sister_score: 0, brother_score: 0 }]);
+            } else {
+                globalScores.sister = sc.sister_score;
+                globalScores.brother = sc.brother_score;
+            }
+
+            // 3. 读取今日
+            await loadDailyData(queryDate);
             updateStatus('ok', '已同步');
         } catch (e) {
             updateStatus('err', '离线');
@@ -285,84 +256,130 @@
         }
         document.getElementById('loading-mask').style.display = 'none';
         renderAll();
-        
-        sb.channel('family_data').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'family_data' }, payload => {
-            if(payload.new && payload.new.content) { appData = payload.new.content; renderAll(); }
+
+        sb.channel('public:app_totals').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_totals' }, p => {
+            globalScores.sister = p.new.sister_score;
+            globalScores.brother = p.new.brother_score;
+            renderAll();
         }).subscribe();
     }
 
-    function sanitizeData() {
-        if(!appData.userConfig) appData.userConfig = JSON.parse(JSON.stringify(defaultConfig));
-        ['sister', 'brother'].forEach(u => {
-            ['tasks', 'penalties', 'rewards'].forEach(t => {
-                if(!appData.userConfig[u][t]) appData.userConfig[u][t] = [];
-                appData.userConfig[u][t].forEach(item => {
-                    if (item.cost !== undefined && (item.points === undefined || item.points === null)) item.points = item.cost;
-                    item.points = parseInt(item.points) || 0;
-                });
-            });
-        });
-        saveCloud(false);
+    async function loadDailyData(dateStr) {
+        let { data } = await sb.from('app_daily').select('*').eq('date_id', dateStr).single();
+        if(data) {
+            dailyData.sister = data.sister_data || {logs:[], done:[]};
+            dailyData.brother = data.brother_data || {logs:[], done:[]};
+        } else {
+            dailyData = { sister: {logs:[], done:[]}, brother: {logs:[], done:[]} };
+        }
+        renderAll();
     }
 
-    async function saveCloud(showLoading=true) {
-        if(showLoading) updateStatus('loading', '保存...');
-        await sb.from('family_data').update({ content: appData }).eq('id', 1);
-        if(showLoading) updateStatus('ok', '已保存');
+    // --- 核心交互 ---
+    async function handleAction(item, type, e, points) {
+        if (queryDate !== new Date().toISOString().split('T')[0]) return alert("只能操作今天！");
+        
+        points = parseInt(points) || 0;
+        let userData = dailyData[curUser];
+
+        if(type === 'earn') {
+            if(userData.done.includes(item.id)) {
+                if(!confirm(`撤销【${item.name}】？`)) return;
+                globalScores[curUser] -= points;
+                userData.done = userData.done.filter(id => id !== item.id);
+                addLog(`撤销:${item.name}`, -points);
+            } else {
+                globalScores[curUser] += points;
+                userData.done.push(item.id);
+                addLog(item.name, points);
+                confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
+                createFloat(e, `+${points}`, '#00b894');
+            }
+        } else if(type === 'penalty') {
+            globalScores[curUser] += points; 
+            addLog(item.name, points);
+            createFloat(e, points, '#ff6b6b');
+        } else if(type === 'spend') {
+            if(globalScores[curUser] < points) return alert("积分不足");
+            if(!confirm(`兑换【${item.name}】消耗 ${points} 积分？`)) return;
+            globalScores[curUser] -= points;
+            addLog(`兑换:${item.name}`, -points);
+            createFloat(e, `-${points}`, '#fbc531');
+        }
+
+        saveTransaction();
+        renderAll();
     }
 
-    function updateStatus(type, text) {
-        const dot = document.getElementById('sync-dot');
-        const txt = document.getElementById('sync-text');
-        dot.className = `dot ${type}`; txt.innerText = text;
+    async function saveTransaction() {
+        updateStatus('load', '保存...');
+        await sb.from('app_totals').update({ sister_score: globalScores.sister, brother_score: globalScores.brother }).eq('id', 1);
+        await sb.from('app_daily').upsert({ date_id: queryDate, sister_data: dailyData.sister, brother_data: dailyData.brother });
+        updateStatus('ok', '已保存');
+    }
+
+    // --- 🟢 调分功能 (Admin) ---
+    function adminAdjust() {
+        const pwd = prompt("请输入家长密码:");
+        if (pwd !== ADMIN_PWD) return alert("密码错误");
+        
+        const input = prompt("请输入要调整的分数 (支持正负数，如 +100 或 -50):");
+        const val = parseInt(input);
+        
+        if (!isNaN(val) && val !== 0) {
+            globalScores[curUser] += val;
+            addLog("👨‍🔧 家长调整", val);
+            
+            saveTransaction();
+            renderAll();
+            alert(`调整成功！当前总分：${globalScores[curUser]}`);
+        } else {
+            alert("输入无效");
+        }
     }
 
     // --- 渲染 ---
     function renderAll() {
-        document.getElementById('current-score').innerText = appData.userData[curUser].score;
-        let s = appData.userData[curUser].score, lv = "🌟 青铜";
+        document.getElementById('current-score').innerText = globalScores[curUser];
+        let s = globalScores[curUser], lv = "🌟 青铜";
         if(s>=100) lv="🥈 白银"; if(s>=500) lv="🥇 黄金"; if(s>=1000) lv="👑 钻石";
         document.getElementById('current-level').innerText = lv;
 
         const area = document.getElementById('list-area');
         area.innerHTML = '';
-        const cfg = appData.userConfig[curUser];
+        const cfg = globalConfig[curUser];
 
+        // 日志页
         if(curTab === 'log') {
             const dateBar = document.createElement('div');
-            dateBar.style.cssText = "background:white;padding:10px;border-radius:10px;margin-bottom:10px;text-align:center";
-            dateBar.innerHTML = `<input type="date" value="${queryDate}" onchange="changeDate(this.value)" style="font-size:1.1rem;border:1px solid #ddd;padding:5px;border-radius:5px">`;
+            dateBar.className = 'date-bar';
+            dateBar.innerHTML = `<input type="date" class="date-input" value="${queryDate}" onchange="changeDate(this.value)"><div class="daily-summary">当日: <span class="daily-val" id="day-sum">0</span></div>`;
             area.appendChild(dateBar);
 
-            const logs = appData.userData[curUser].history || [];
-            const targetLogs = logs.filter(l => {
-                const logDate = new Date(l.t).toLocaleDateString('zh-CN').split('/').map(p=>p.padStart(2,'0')).join('-');
-                return logDate === queryDate;
-            });
-            if(targetLogs.length===0) area.innerHTML+='<div style="text-align:center;color:#999;margin-top:20px">无记录</div>';
-            targetLogs.forEach(l => {
+            const logs = dailyData[curUser].logs || [];
+            let daySum = 0;
+            if(logs.length === 0) area.innerHTML += '<div class="log-empty">暂无记录</div>';
+            
+            logs.forEach(l => {
+                daySum += l.p;
                 const row = document.createElement('div'); row.className = 'log-entry';
-                row.innerHTML = `<span>${l.n} <small style="color:#ccc">${l.t.split(' ')[1]||''}</small></span><span class="log-score ${l.p>0?'plus':'minus'}">${l.p>0?'+':''}${l.p}</span>`;
+                row.innerHTML = `<span>${l.n} <small style="color:#ccc">${l.t}</small></span><span class="log-score ${l.p>0?'plus':'minus'}">${l.p>0?'+':''}${l.p}</span>`;
                 area.appendChild(row);
             });
+            const sumEl = document.getElementById('day-sum');
+            sumEl.innerText = (daySum>0?'+':'')+daySum;
+            sumEl.className = 'daily-val ' + (daySum>=0?'pos':'neg');
             return;
         }
 
+        // 列表页
         let items = [], type = curTab;
         if(curTab === 'earn') items = cfg.tasks;
         else if(curTab === 'penalty') items = cfg.penalties;
-        else { items = cfg.rewards; type = 'spend'; }
-
-        if(!items) items = [];
-        const today = new Date().toISOString().split('T')[0];
-        const todayLog = (appData.userData[curUser].dailyLog && appData.userData[curUser].dailyLog[today]) || [];
+        else items = cfg.rewards;
 
         let groups = {};
-        items.forEach(i => {
-            let sec = (type==='earn' ? i.section : '') || '通用';
-            if(!groups[sec]) groups[sec] = [];
-            groups[sec].push(i);
-        });
+        items.forEach(i => { let sec = (type==='earn'?i.section:'')||'列表'; if(!groups[sec])groups[sec]=[]; groups[sec].push(i); });
 
         for(let sec in groups) {
             if(type==='earn') {
@@ -370,92 +387,34 @@
             }
             groups[sec].forEach(item => {
                 const div = document.createElement('div'); div.className = 'task-card';
-                if(type==='earn' && todayLog.includes(item.id)) div.classList.add('is-done');
-
+                if(type==='earn' && dailyData[curUser].done.includes(item.id)) div.classList.add('is-done');
                 let bg = type=='earn'?'#00b894':(type=='penalty'?'#ff6b6b':'#fbc531');
                 let val = parseInt(item.points)||0;
                 let txt = type=='spend'? val : (val>0?'+'+val:val);
-                let txtColor = type=='spend' ? '#333' : 'white';
+                let txtCol = type=='spend' ? '#333' : 'white';
                 
                 div.innerHTML = `
                     <div style="display:flex;align-items:center;flex:1">
                         <div class="icon-box">${item.icon||'🔹'}</div>
                         <div class="info-box"><div class="task-name">${item.name}</div><div class="task-desc">${item.desc||''}</div></div>
                     </div>
-                    <div class="points-tag" style="background:${bg};color:${txtColor}">${txt}</div>
+                    <div class="points-tag" style="background:${bg};color:${txtCol}">${txt}</div>
                 `;
                 div.onclick = function(e) { handleAction(item, type, e, val); };
                 area.appendChild(div);
             });
         }
+        
         document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
         document.querySelectorAll('.tab')[['earn','spend','penalty','log'].indexOf(curTab)].classList.add('active');
     }
 
-    function changeDate(val) { queryDate = val; renderAll(); }
+    async function changeDate(val) { queryDate = val; updateStatus('load', '加载...'); await loadDailyData(val); updateStatus('ok', '已同步'); }
+    function addLog(n, p) { const t = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}); dailyData[curUser].logs.unshift({ n, p, t }); }
+    function createFloat(e, txt, col) { const el = document.createElement('div'); el.className='floating-num'; el.innerText=txt; el.style.color=col; el.style.left=(e.clientX-20)+'px'; el.style.top=(e.clientY-40)+'px'; document.body.appendChild(el); setTimeout(()=>el.remove(), 800); }
+    function updateStatus(s, t) { const dot = document.getElementById('sync-dot'); document.getElementById('sync-text').innerText = t; dot.className = `dot ${s}`; }
 
-    function handleAction(item, type, e, points) {
-        points = parseInt(points) || 0;
-        const today = new Date().toISOString().split('T')[0];
-        if(!appData.userData[curUser].dailyLog) appData.userData[curUser].dailyLog = {};
-        let todayLog = appData.userData[curUser].dailyLog[today] || [];
-
-        if(type === 'earn') {
-            if(todayLog.includes(item.id)) {
-                if(!confirm(`撤销【${item.name}】打卡？`)) return;
-                appData.userData[curUser].score -= points;
-                appData.userData[curUser].dailyLog[today] = todayLog.filter(id => id !== item.id);
-                addLog(`撤销:${item.name}`, -points);
-            } else {
-                appData.userData[curUser].score += points;
-                if(!appData.userData[curUser].dailyLog[today]) appData.userData[curUser].dailyLog[today] = [];
-                appData.userData[curUser].dailyLog[today].push(item.id);
-                addLog(item.name, points);
-                confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
-                createFloat(e, `+${points}`, '#00b894');
-            }
-        } 
-        else if(type === 'penalty') {
-            appData.userData[curUser].score += points;
-            addLog(item.name, points);
-            createFloat(e, points, '#ff6b6b');
-        } 
-        else if(type === 'spend') {
-            if(appData.userData[curUser].score < points) return alert("积分不足");
-            if(!confirm(`兑换【${item.name}】消耗 ${points} 积分？`)) return;
-            appData.userData[curUser].score -= points;
-            addLog(`兑换:${item.name}`, -points);
-            createFloat(e, `-${points}`, '#fbc531');
-        }
-        saveCloud(); renderAll();
-    }
-
-    // --- 辅助 ---
-    function addLog(n, p) {
-        const l = { n, p, t: new Date().toLocaleString('zh-CN', {hour12: false}) };
-        appData.userData[curUser].history.unshift(l);
-        if(appData.userData[curUser].history.length > 200) appData.userData[curUser].history.pop();
-    }
-
-    function createFloat(e, txt, col) {
-        const el = document.createElement('div'); el.className='floating-num';
-        el.innerText=txt; el.style.color=col;
-        el.style.left=(e.clientX-20)+'px'; el.style.top=(e.clientY-40)+'px';
-        document.body.appendChild(el); setTimeout(()=>el.remove(), 800);
-    }
-
-    function adminAdjust() {
-        const pwd = prompt("管理密码:");
-        if(pwd !== ADMIN_PWD) return alert("密码错误");
-        const val = parseInt(prompt("调整分数 (+/-):"));
-        if(!isNaN(val) && val!==0) {
-            appData.userData[curUser].score += val;
-            addLog("👨‍🔧 家长调整", val);
-            saveCloud(); renderAll(); alert("已调整");
-        }
-    }
-
-    // --- 设置 ---
+    // --- 设置逻辑 ---
     function openSettings() { document.getElementById('settings-modal').style.display='block'; setCurUser=curUser; renderSettingsList(); updateSetTabs(); }
     function closeSettings() { document.getElementById('settings-modal').style.display='none'; }
     function setSettingsUser(u) { setCurUser=u; updateSetTabs(); renderSettingsList(); }
@@ -464,45 +423,24 @@
     function renderSettingsList() {
         const list = document.getElementById('settings-list'); list.innerHTML='';
         const type = document.getElementById('set-type').value;
-        const items = appData.userConfig[setCurUser][type];
-        
+        const items = globalConfig[setCurUser][type];
         let groups={};
-        items.forEach((item,idx)=>{ 
-            item._idx=idx; let s=(type=='tasks'?item.section:'')||'列表'; 
-            if(!groups[s]) groups[s]=[]; groups[s].push(item); 
-        });
+        items.forEach((item,idx)=>{ item._idx=idx; let sec=(type=='tasks'?item.section:'')||'列表'; if(!groups[sec])groups[sec]=[]; groups[sec].push(item); });
 
         for(let sec in groups){
             const t=document.createElement('div'); t.className='set-group-title'; 
-            t.innerHTML=`<span>${sec}</span> <button class="btn-tiny-add" onclick="addItem('${sec}')">＋ 加一项</button>`;
-            list.appendChild(t);
-            
-            const grp=document.createElement('div'); grp.className='set-group';
+            t.innerHTML=`<span>${sec}</span> <button class="btn-tiny-add" onclick="addItem('${sec}')">＋</button>`; list.appendChild(t);
             groups[sec].forEach(item=>{
                 const row=document.createElement('div'); row.className='form-card';
-                row.innerHTML=`
-                <div class="form-top">
-                    <input class="form-input section-inp" style="width:60px" value="${item.section||''}" placeholder="组" onchange="updCfg('${type}',${item._idx},'section',this.value)">
-                    <input class="form-input" style="width:40px" value="${item.icon}" onchange="updCfg('${type}',${item._idx},'icon',this.value)">
-                    <div style="flex:1"><input class="form-input" value="${item.name}" onchange="updCfg('${type}',${item._idx},'name',this.value)"></div>
-                    <input type="number" class="form-input" style="width:50px" value="${item.points}" onchange="updCfg('${type}',${item._idx},'points',this.value)">
-                    <button class="btn-del" onclick="delItem('${type}',${item._idx})">×</button>
-                </div>
-                <div class="form-bot">
-                    <input class="form-input" style="width:100%;color:#666;font-size:0.8rem" value="${item.desc||''}" placeholder="说明文字" onchange="updCfg('${type}',${item._idx},'desc',this.value)">
-                </div>`;
-                grp.appendChild(row);
+                row.innerHTML=`<div class="form-top"><input class="form-input section-inp" style="width:60px" value="${item.section||''}" onchange="updCfg('${type}',${item._idx},'section',this.value)"><input class="form-input" style="width:40px" value="${item.icon}" onchange="updCfg('${type}',${item._idx},'icon',this.value)"><div style="flex:1"><input class="form-input" value="${item.name}" onchange="updCfg('${type}',${item._idx},'name',this.value)"></div><input type="number" class="form-input" style="width:50px" value="${item.points}" onchange="updCfg('${type}',${item._idx},'points',this.value)"><button class="btn-del" onclick="delItem('${type}',${item._idx})">×</button></div><div class="form-bot"><input class="form-input" style="width:100%;color:#666;font-size:0.8rem" value="${item.desc||''}" placeholder="说明" onchange="updCfg('${type}',${item._idx},'desc',this.value)"></div>`;
+                list.appendChild(row);
             });
-            list.appendChild(grp);
         }
     }
-    function updCfg(t,i,k,v){ if(k=='points')v=parseInt(v); appData.userConfig[setCurUser][t][i][k]=v; }
-    function addItem(sec){ let t=document.getElementById('set-type').value; appData.userConfig[setCurUser][t].push({id:Date.now(),icon:"✨",name:"新项",section:sec,points:5,desc:""}); renderSettingsList(); }
-    function delItem(t,i){ if(confirm("删除?")){ appData.userConfig[setCurUser][t].splice(i,1); renderSettingsList(); } }
-    function saveSettings(){ saveCloud(); closeSettings(); renderAll(); alert("设置已保存"); }
-    function resetDefault(){ if(confirm("恢复默认?")){ appData.userConfig=JSON.parse(JSON.stringify(defaultConfig)); renderSettingsList(); } }
-    function forceReset(){ if(confirm("⚠️ 清空数据？")){ appData={userData:{sister:{score:0,history:[],dailyLog:{}},brother:{score:0,history:[],dailyLog:{}}},userConfig:JSON.parse(JSON.stringify(defaultConfig))}; saveCloud(); location.reload(); } }
-
+    function updCfg(t,i,k,v){ if(k=='points')v=parseInt(v); globalConfig[setCurUser][t][i][k]=v; }
+    function addItem(sec){ let t=document.getElementById('set-type').value; globalConfig[setCurUser][t].push({id:Date.now(),icon:"✨",name:"新项",section:sec,points:5,desc:""}); renderSettingsList(); }
+    function delItem(t,i){ if(confirm("删除?")){ globalConfig[setCurUser][t].splice(i,1); renderSettingsList(); } }
+    async function saveSettings(){ updateStatus('load','保存配置...'); await sb.from('app_config').update({data:globalConfig}).eq('id',1); closeSettings(); updateStatus('ok','已保存'); renderAll(); }
     function switchUser(u) { curUser=u; document.querySelectorAll('.avatar').forEach(e=>e.classList.remove('active')); document.getElementById('avatar-'+u).classList.add('active'); curTab='earn'; updateUI(); }
     function switchTab(t) { curTab=t; updateUI(); }
     function updateUI() { renderAll(); }
